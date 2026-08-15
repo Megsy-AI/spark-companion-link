@@ -54,10 +54,9 @@ type Attachment = {
   text?: string;
 };
 
-const PLAN_PRICE = 10;
-/** Reference Gram (TON) price in USD, kept in sync with the wallet page. */
-const TON_USD = 3.5;
-const PLAN_PRICE_TON = Math.round((PLAN_PRICE / TON_USD) * 100) / 100;
+const PLAN_PRICE = 8;
+/** Pro plan price in Gram (TON), billed directly to the connected wallet. */
+const PLAN_PRICE_TON = 8;
 
 const MODES: { id: Mode; label: string; icon: typeof MessageCircle; placeholder: string }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle, placeholder: "Ask Nova anything…" },
