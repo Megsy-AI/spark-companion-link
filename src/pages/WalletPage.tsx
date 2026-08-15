@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Power, Lock, TrendingUp, ChevronRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { PaymentError, sendTonPayment, TON_FEE_BUFFER } from "@/lib/ton";
-import { createTransaction, isWalletVerified } from "@/lib/game-api";
+import { createTransaction, isWalletVerified, verifyTonOnChain } from "@/lib/game-api";
 import { payWithStars, STARS_PRICES, type StarsProductId } from "@/lib/stars";
 import TelegramStar from "@/components/TelegramStar";
 
@@ -139,8 +139,10 @@ const WalletPage = () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount <= 0) { toast({ title: "Invalid Amount", variant: "destructive" }); return; }
     try {
-      await sendTonPayment(tonConnectUI, { amountTon: amount, telegramId: user.telegramUser.id, action: "deposit" });
-      await createTransaction({ telegramId: user.telegramUser.id, type: "deposit", amount, currency: "ton", walletAddress: address });
+      const tx = await sendTonPayment(tonConnectUI, { amountTon: amount, telegramId: user.telegramUser.id, action: "deposit" });
+      const verification = await verifyTonOnChain(tx.intentId, tx.boc, tonConnectUI.account?.address);
+      if (!verification.verified) throw new PaymentError("failed", verification.error ?? "Payment is still confirming");
+      await createTransaction({ telegramId: user.telegramUser.id, type: "deposit", amount, currency: "ton", walletAddress: address, txHash: verification.tx_hash });
       toast({ title: "Deposit Sent", description: `${amount} Gram submitted` });
       setDepositOpen(false);
       setDepositAmount("");
@@ -206,14 +208,15 @@ const WalletPage = () => {
         telegramId: user.telegramUser.id,
         action: "wallet_verification",
       });
+      const verification = await verifyTonOnChain(tx.intentId, tx.boc, tonConnectUI.account?.address);
+      if (!verification.verified) throw new PaymentError("failed", verification.error ?? "Payment is still confirming");
       await createTransaction({
         telegramId: user.telegramUser.id,
         type: "wallet_verification",
         amount: VERIFY_AMOUNT,
         currency: "ton",
         walletAddress: address,
-        txHash: tx.boc || null,
-        status: "completed",
+        txHash: verification.tx_hash || null,
       });
       setIsVerified(true);
       setVerifyOpen(false);
