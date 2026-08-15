@@ -14,6 +14,10 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
+    // Hooks must always resolve through the same React module instance. Vite can
+    // otherwise create a second pre-bundled copy for Radix/TON dependencies,
+    // leaving ReactCurrentDispatcher null at runtime.
+    dedupe: ["react", "react-dom"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
@@ -39,6 +43,14 @@ export default defineConfig(({ mode }) => ({
     legalComments: "none",
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-router-dom"],
+    include: [
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react/jsx-runtime",
+      "react-router-dom",
+      "@radix-ui/react-tooltip",
+      "@tonconnect/ui-react",
+    ],
   },
 }));
