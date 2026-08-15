@@ -63,7 +63,10 @@ function matchesIntent(tx: Record<string, unknown>, memo: string, amountNano: nu
 
 function extractComment(input: Record<string, unknown>) {
   const data = input.msg_data as { text?: string; body?: string } | undefined;
-  if (data?.text) return data.text;
+  if (data?.text) {
+    try { return new TextDecoder().decode(Uint8Array.from(atob(data.text), (char) => char.charCodeAt(0))); }
+    catch { return data.text; }
+  }
   if (!data?.body) return "";
   try {
     const slice = Cell.fromBase64(data.body).beginParse();
