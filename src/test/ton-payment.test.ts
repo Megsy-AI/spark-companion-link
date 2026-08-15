@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sendTonPayment, TREASURY_ADDRESS } from "@/lib/ton";
 
+vi.mock("@/integrations/supabase/client", () => ({
+  supabase: { functions: { invoke: vi.fn().mockResolvedValue({ data: { id: "intent-id", memo: "nova:123e4567-e89b-12d3-a456-426614174000" }, error: null }) } },
+}));
+
+const payment = { amountTon: 5, telegramId: 123, action: "deposit" as const };
+
 const makeTonConnect = (balanceNano: string) => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
     ok: true,
@@ -22,7 +28,7 @@ describe("TON treasury payments", () => {
   it("opens wallet confirmation without relying on a third-party balance API", async () => {
     const tonConnect = makeTonConnect("0");
 
-    await expect(sendTonPayment(tonConnect as never, { amountTon: 5 })).resolves.toEqual({
+    await expect(sendTonPayment(tonConnect as never, payment)).resolves.toMatchObject({
       boc: "signed-boc",
     });
     expect(fetch).not.toHaveBeenCalled();
@@ -32,12 +38,12 @@ describe("TON treasury payments", () => {
   it("sends a plain mainnet transfer only to the treasury", async () => {
     const tonConnect = makeTonConnect("10000000000");
 
-    await expect(sendTonPayment(tonConnect as never, { amountTon: 5, comment: "ignored safely" })).resolves.toEqual({
+    await expect(sendTonPayment(tonConnect as never, payment)).resolves.toMatchObject({
       boc: "signed-boc",
     });
     expect(tonConnect.sendTransaction).toHaveBeenCalledWith({
       validUntil: expect.any(Number),
-      messages: [{ address: TREASURY_ADDRESS, amount: "5000000000" }],
+      messages: [{ address: TREASURY_ADDRESS, amount: "5000000000", payload: expect.any(String) }],
     });
   });
 
@@ -45,7 +51,7 @@ describe("TON treasury payments", () => {
     const tonConnect = makeTonConnect("10000000000");
     tonConnect.account.chain = "-3";
 
-    await expect(sendTonPayment(tonConnect as never, { amountTon: 5 })).rejects.toMatchObject({
+    await expect(sendTonPayment(tonConnect as never, payment)).rejects.toMatchObject({
       code: "wrong_network",
     });
     expect(tonConnect.sendTransaction).not.toHaveBeenCalled();
@@ -59,7 +65,7 @@ describe("TON treasury payments", () => {
       sendTransaction: vi.fn().mockResolvedValue({ boc: "signed-boc" }),
     };
 
-    await expect(sendTonPayment(tonConnect as never, { amountTon: 5 })).resolves.toEqual({
+    await expect(sendTonPayment(tonConnect as never, payment)).resolves.toMatchObject({
       boc: "signed-boc",
     });
     expect(fetch).not.toHaveBeenCalled();

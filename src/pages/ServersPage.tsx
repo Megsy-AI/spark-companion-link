@@ -104,11 +104,13 @@ const ServersPage = () => {
     try {
       const transaction = await sendTonPayment(tonConnectUI, {
         amountTon: price,
-        comment: `Nova ${server.name}`,
+        telegramId: user.telegramUser.id,
+        action: "server",
+        metadata: { serverId: server.id },
       });
 
       toast({ title: "Verifying payment...", description: "Checking blockchain confirmation" });
-      const verification = await verifyTonOnChain(price, transaction.boc, tonConnectUI.account?.address);
+      const verification = await verifyTonOnChain(transaction.intentId, transaction.boc, tonConnectUI.account?.address);
       if (!verification.verified) {
         toast({ title: "Verification failed", description: "Transaction not found on blockchain.", variant: "destructive" });
         return;

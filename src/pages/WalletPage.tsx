@@ -139,7 +139,7 @@ const WalletPage = () => {
     const amount = parseFloat(depositAmount);
     if (!amount || amount <= 0) { toast({ title: "Invalid Amount", variant: "destructive" }); return; }
     try {
-      await sendTonPayment(tonConnectUI, { amountTon: amount, comment: "Nova deposit" });
+      await sendTonPayment(tonConnectUI, { amountTon: amount, telegramId: user.telegramUser.id, action: "deposit" });
       await createTransaction({ telegramId: user.telegramUser.id, type: "deposit", amount, currency: "ton", walletAddress: address });
       toast({ title: "Deposit Sent", description: `${amount} Gram submitted` });
       setDepositOpen(false);
@@ -203,7 +203,8 @@ const WalletPage = () => {
     try {
       const tx = await sendTonPayment(tonConnectUI, {
         amountTon: VERIFY_AMOUNT,
-        comment: "Nova wallet verification",
+        telegramId: user.telegramUser.id,
+        action: "wallet_verification",
       });
       await createTransaction({
         telegramId: user.telegramUser.id,

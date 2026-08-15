@@ -229,10 +229,11 @@ export default function AiPage() {
     try {
       const tx = await sendTonPayment(tonConnectUI, {
         amountTon: PLAN_PRICE_TON,
-        comment: "Nova AI Pro",
+        telegramId: user.telegramUser.id,
+        action: "ai_pro",
       });
       toast("Verifying your payment on-chain…");
-      const verification = await verifyTonOnChain(PLAN_PRICE_TON, tx.boc, tonConnectUI.account?.address);
+      const verification = await verifyTonOnChain(tx.intentId, tx.boc, tonConnectUI.account?.address);
       if (!verification.verified) {
         toast.error("Payment not found on-chain yet. Try again in a moment.");
         return;

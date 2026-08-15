@@ -54,13 +54,15 @@ const AttackShopPage = () => {
     try {
       const transaction = await sendTonPayment(tonConnectUI, {
         amountTon: pkg.price,
-        comment: `Nova ${pkg.name}`,
+        telegramId: user.telegramUser.id,
+        action: "battle_item",
+        metadata: { category, packageKey },
       });
 
       setVerifying(packageKey);
       toast({ title: "Verifying payment...", description: "Checking blockchain confirmation" });
 
-      const verification = await verifyTonOnChain(pkg.price, transaction.boc, tonConnectUI.account?.address);
+      const verification = await verifyTonOnChain(transaction.intentId, transaction.boc, tonConnectUI.account?.address);
 
       if (!verification.verified) {
         setVerifying(null);
