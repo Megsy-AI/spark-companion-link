@@ -796,7 +796,7 @@ export default function AiPage() {
 
               <div className="mt-4 rounded-[22px] border border-border bg-[hsl(0_0%_100%/0.66)] px-4 py-4 backdrop-blur-md sm:px-5 sm:py-5">
                 <p className="text-[clamp(32px,10vw,44px)] font-display font-medium leading-none tracking-tight text-gradient-primary">
-                  ${PLAN_PRICE}
+                  {PLAN_PRICE_TON} TON
                 </p>
                 <p className="mt-1.5 text-[clamp(9px,2.6vw,11px)] uppercase tracking-[0.18em] text-muted-foreground">
                   per month
