@@ -1,15 +1,28 @@
+const PUBLIC_MANIFEST_ENDPOINT =
+  "https://ltgampdtawuefwwayncx.supabase.co/functions/v1/tonconnect-manifest";
+
+function isLovablePreview(hostname: string): boolean {
+  return hostname.endsWith(".lovable.app") || hostname.endsWith(".lovableproject.com");
+}
+
 /**
- * TON Connect requires the manifest `url` to match the origin the app is served
- * from. A manifest hard-coded to one domain makes wallets refuse to connect
- * (and therefore every payment fails) on any other host.
- *
- * Use the stable production manifest. Tonkeeper must be able to fetch this URL
- * itself, and random deployment URLs or Edge Function query URLs are not
- * reliable wallet-facing manifest locations.
+ * Lovable preview routes are protected by an auth redirect, so wallets cannot
+ * fetch a manifest from the preview origin. Serve that manifest through the
+ * public Edge Function while preserving the actual dApp origin inside it.
+ * Deployed hosts keep a same-origin static manifest generated at build time.
  */
 export function resolveTonManifestUrl(): string {
-  if (typeof window !== "undefined" && window.location.protocol === "https:") {
-    return `${window.location.origin}/tonconnect-manifest.json`;
+  if (typeof window !== "undefined") {
+    const { origin, hostname, protocol } = window.location;
+
+    if (protocol === "https:" && isLovablePreview(hostname)) {
+      return `${PUBLIC_MANIFEST_ENDPOINT}?origin=${encodeURIComponent(origin)}`;
+    }
+
+    if (protocol === "https:") {
+      return `${origin}/tonconnect-manifest.json`;
+    }
   }
+
   return "https://nova.megsyai.com/tonconnect-manifest.json";
 }
