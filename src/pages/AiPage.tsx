@@ -54,10 +54,9 @@ type Attachment = {
   text?: string;
 };
 
-const PLAN_PRICE = 10;
-/** Reference Gram (TON) price in USD, kept in sync with the wallet page. */
-const TON_USD = 3.5;
-const PLAN_PRICE_TON = Math.round((PLAN_PRICE / TON_USD) * 100) / 100;
+const PLAN_PRICE = 8;
+/** Pro plan price in Gram (TON), billed directly to the connected wallet. */
+const PLAN_PRICE_TON = 8;
 
 const MODES: { id: Mode; label: string; icon: typeof MessageCircle; placeholder: string }[] = [
   { id: "chat", label: "Chat", icon: MessageCircle, placeholder: "Ask Nova anything…" },
@@ -797,7 +796,7 @@ export default function AiPage() {
 
               <div className="mt-4 rounded-[22px] border border-border bg-[hsl(0_0%_100%/0.66)] px-4 py-4 backdrop-blur-md sm:px-5 sm:py-5">
                 <p className="text-[clamp(32px,10vw,44px)] font-display font-medium leading-none tracking-tight text-gradient-primary">
-                  ${PLAN_PRICE}
+                  {PLAN_PRICE_TON} TON
                 </p>
                 <p className="mt-1.5 text-[clamp(9px,2.6vw,11px)] uppercase tracking-[0.18em] text-muted-foreground">
                   per month
@@ -832,7 +831,7 @@ export default function AiPage() {
                     className="liquid-press glow-primary flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-primary font-display text-[14px] font-medium text-primary-foreground disabled:opacity-60"
                   >
                     {buying && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Pay {PLAN_PRICE_TON} Gram (${PLAN_PRICE})
+                    Pay {PLAN_PRICE_TON} TON
                   </button>
                   <button
                     type="button"
