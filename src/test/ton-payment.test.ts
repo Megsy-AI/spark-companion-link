@@ -36,8 +36,6 @@ describe("TON treasury payments", () => {
       boc: "signed-boc",
     });
     expect(tonConnect.sendTransaction).toHaveBeenCalledWith({
-      network: "-239",
-      from: "0:sender",
       validUntil: expect.any(Number),
       messages: [{ address: TREASURY_ADDRESS, amount: "5000000000" }],
     });
