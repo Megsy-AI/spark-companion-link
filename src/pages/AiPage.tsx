@@ -831,7 +831,7 @@ export default function AiPage() {
                     className="liquid-press glow-primary flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-primary font-display text-[14px] font-medium text-primary-foreground disabled:opacity-60"
                   >
                     {buying && <Loader2 className="h-4 w-4 animate-spin" />}
-                    Pay {PLAN_PRICE_TON} Gram (${PLAN_PRICE})
+                    Pay {PLAN_PRICE_TON} TON
                   </button>
                   <button
                     type="button"
