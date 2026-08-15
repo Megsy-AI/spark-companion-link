@@ -4,11 +4,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
+import { resolveTonManifestUrl, resolveBestTonManifestUrl } from "@/lib/tonconnect-manifest";
 import { AppProvider } from "@/context/AppContext";
 import BottomNav from "@/components/BottomNav";
 import PrizeModal from "@/components/PrizeModal";
 import StarryBackground from "@/components/StarryBackground";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import PageTransition from "@/components/PageTransition";
 import {
@@ -94,9 +95,24 @@ const AnimatedRoutes = () => {
   );
 };
 
-const App = () => (
+const App = () => {
+  // Resolve a manifest whose origin matches this host; wallets refuse to connect
+  // when it does not, which silently broke every TON payment.
+  const [manifestUrl, setManifestUrl] = useState(resolveTonManifestUrl);
+  useEffect(() => {
+    let active = true;
+    resolveBestTonManifestUrl().then((url) => {
+      if (active) setManifestUrl(url);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
   <TonConnectUIProvider
-    manifestUrl="https://nova.megsyai.com/tonconnect-manifest.json"
+    key={manifestUrl}
+    manifestUrl={manifestUrl}
     actionsConfiguration={{
       // Bring the user back to the mini app after signing in the wallet.
       twaReturnUrl: "https://t.me/Noveaibot/App",
@@ -122,6 +138,7 @@ const App = () => (
       </TooltipProvider>
     </QueryClientProvider>
   </TonConnectUIProvider>
-);
+  );
+};
 
 export default App;
