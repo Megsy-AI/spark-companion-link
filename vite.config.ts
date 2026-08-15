@@ -43,6 +43,14 @@ export default defineConfig(({ mode }) => ({
     legalComments: "none",
   },
   optimizeDeps: {
+    // Increment only after dependency-cache incidents. This value participates
+    // in Vite's optimizer hash, forcing long-lived Telegram/Lovable WebViews to
+    // discard immutable pre-bundles from an interrupted optimization pass.
+    esbuildOptions: {
+      define: {
+        __NOVA_DEP_CACHE_VERSION__: '"2026-08-16-1"',
+      },
+    },
     include: [
       "react",
       "react-dom",
