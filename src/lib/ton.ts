@@ -1,5 +1,6 @@
 import type { TonConnectUI } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/core";
+import { supabase } from "@/integrations/supabase/client";
 
 /** Single source of truth for the project treasury wallet. */
 export const TREASURY_ADDRESS = "UQAp1QxnLJ2z44IooUovvtVShw7hJBEdxCRV3RlbCYC3D8qj";
@@ -24,6 +25,14 @@ export class PaymentError extends Error {
     this.name = "PaymentError";
   }
 }
+
+export type TonPaymentAction = "deposit" | "wallet_verification" | "server" | "battle_item" | "ai_pro" | "custom_server";
+type PaymentOptions = {
+  amountTon: number;
+  telegramId: number;
+  action: TonPaymentAction;
+  metadata?: Record<string, unknown>;
+};
 
 const toNano = (amountTon: number) => {
   const [whole = "0", fraction = ""] = amountTon.toFixed(9).split(".");
@@ -87,8 +96,8 @@ const isCancellation = (err: unknown) => {
  */
 export const sendTonPayment = async (
   tonConnectUI: TonConnectUI,
-  opts: { amountTon: number; memo: string },
-): Promise<{ boc: string }> => {
+  opts: PaymentOptions,
+): Promise<{ boc: string; intentId: string; memo: string }> => {
   const amountTon = Number(opts.amountTon);
   if (!Number.isFinite(amountTon) || amountTon <= 0) {
     throw new PaymentError("invalid_amount", "Enter a valid Gram amount");
@@ -112,15 +121,17 @@ export const sendTonPayment = async (
     throw new PaymentError("wrong_network", "Switch your wallet to TON Mainnet and try again");
   }
 
-  // Send immediately through the connected wallet. Do not gate the transaction on a
-  // third-party balance API: those endpoints can be unavailable or blocked by CORS,
-  // which previously made valid deposits and NFT purchases fail before the wallet
-  // was even opened. The wallet performs the authoritative balance/fee simulation.
-  // Keep this as a plain transfer for maximum wallet compatibility.
+  const { data: intent, error: intentError } = await supabase.functions.invoke("create-ton-payment-intent", {
+    body: { telegram_id: opts.telegramId, action: opts.action, amount_ton: amountTon, metadata: opts.metadata ?? {} },
+  });
+  if (intentError || !intent?.id || !intent?.memo) {
+    throw new PaymentError("failed", "Could not prepare payment. Please try again.");
+  }
+
   const message = {
     address: TREASURY_ADDRESS,
     amount: toNano(amountTon).toString(),
-    payload: buildCommentPayload(opts.memo),
+    payload: buildCommentPayload(intent.memo),
   };
 
   try {
@@ -133,7 +144,7 @@ export const sendTonPayment = async (
     if (!result?.boc) {
       throw new PaymentError("failed", "The wallet did not return a signed transaction. Please try again.");
     }
-    return { boc: result.boc };
+    return { boc: result.boc, intentId: intent.id, memo: intent.memo };
   } catch (err) {
     if (err instanceof PaymentError) throw err;
     console.error("[ton] sendTransaction failed", err);
