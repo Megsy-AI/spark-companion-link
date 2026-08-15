@@ -20,6 +20,9 @@ verify_jwt = false
 [functions.mining-reminders]
 verify_jwt = false
 
+[functions.tonconnect-manifest]
+verify_jwt = false
+
 [functions.verify-ton-transaction]
 verify_jwt = false
 

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TonConnectUIProvider } from "@tonconnect/ui-react";
+import { resolveTonManifestUrl } from "@/lib/tonconnect-manifest";
 import { AppProvider } from "@/context/AppContext";
 import BottomNav from "@/components/BottomNav";
 import PrizeModal from "@/components/PrizeModal";
@@ -96,7 +97,7 @@ const AnimatedRoutes = () => {
 
 const App = () => (
   <TonConnectUIProvider
-    manifestUrl="https://nova.megsyai.com/tonconnect-manifest.json"
+    manifestUrl={resolveTonManifestUrl()}
     actionsConfiguration={{
       // Bring the user back to the mini app after signing in the wallet.
       twaReturnUrl: "https://t.me/Noveaibot/App",
