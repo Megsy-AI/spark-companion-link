@@ -99,8 +99,9 @@ const App = () => (
   <TonConnectUIProvider
     manifestUrl={resolveTonManifestUrl()}
     actionsConfiguration={{
-      // Bring the user back to the mini app after signing in the wallet.
-      twaReturnUrl: "https://t.me/Noveaibot/App",
+      // Let TON Connect return to the Telegram view that opened the wallet.
+      // A hard-coded Mini App URL makes Tonkeeper show "Unknown error" when
+      // the bot/short-name differs between deployments.
       returnStrategy: "back",
     }}
   >
