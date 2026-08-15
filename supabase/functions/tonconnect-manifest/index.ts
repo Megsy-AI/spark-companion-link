@@ -11,7 +11,13 @@ const corsHeaders = {
 const DEFAULT_ORIGIN = "https://nova.megsyai.com";
 const ICON_URL = "https://nova.megsyai.com/images/nova-logo.png";
 
-const ALLOWED_HOST_SUFFIXES = [".lovable.app", ".lovableproject.com", "megsyai.com"];
+const ALLOWED_HOST_SUFFIXES = [
+  ".lovable.app",
+  ".lovableproject.com",
+  "megsyai.com",
+  ".vercel.app",
+  ".netlify.app",
+];
 
 function safeOrigin(raw: string | null): string {
   if (!raw) return DEFAULT_ORIGIN;

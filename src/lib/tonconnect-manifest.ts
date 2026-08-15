@@ -18,7 +18,9 @@ export function resolveTonManifestUrl(): string {
   const origin = window.location.origin;
   if (origin === PRODUCTION_ORIGIN) return PRODUCTION_MANIFEST;
   if (origin.startsWith("http://")) return PRODUCTION_MANIFEST;
-  return `${origin}/tonconnect-manifest.json`;
+  // Backend-generated manifest whose `url` matches this exact origin (Vercel,
+  // Lovable preview, any host) so wallets accept the connection.
+  return `${MANIFEST_ENDPOINT}?origin=${encodeURIComponent(origin)}`;
 }
 
 /**
@@ -45,5 +47,5 @@ export async function resolveBestTonManifestUrl(): Promise<string> {
     /* fall through */
   }
 
-  return `${origin}/tonconnect-manifest.json`;
+  return PRODUCTION_MANIFEST;
 }
