@@ -98,6 +98,7 @@ const AnimatedRoutes = () => {
 const App = () => (
   <TonConnectUIProvider
     manifestUrl={resolveTonManifestUrl()}
+    restoreConnection={true}
     actionsConfiguration={{
       // Let TON Connect return to the Telegram view that opened the wallet.
       // A hard-coded Mini App URL makes Tonkeeper show "Unknown error" when

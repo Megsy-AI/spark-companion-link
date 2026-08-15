@@ -1,137 +1,81 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.99.2";
+import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { Address, Cell } from "npm:@ton/core@0.63.1";
+import { z } from "npm:zod@3.24.2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-const EXPECTED_WALLET = "UQAp1QxnLJ2z44IooUovvtVShw7hJBEdxCRV3RlbCYC3D8qj";
-const TONCENTER_V2 = "https://toncenter.com/api/v2";
-
-// Convert user-friendly address to raw format for comparison
-// We'll compare amounts on recent incoming transactions instead
-
-async function getRecentTransactions(address: string, limit = 20): Promise<any[]> {
-  const url = `${TONCENTER_V2}/getTransactions?address=${encodeURIComponent(address)}&limit=${limit}`;
-  const res = await fetch(url, {
-    headers: { "Accept": "application/json" },
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    console.error("TONCenter error:", res.status, text);
-    return [];
-  }
-  const json = await res.json();
-  if (!json.ok || !json.result) return [];
-  return json.result;
-}
-
-function findMatchingTransaction(
-  transactions: any[],
-  expectedAmountNano: bigint,
-  maxAgeSeconds: number
-): any | null {
-  const now = Math.floor(Date.now() / 1000);
-
-  for (const tx of transactions) {
-    const txTime = tx.utime || 0;
-    const age = now - txTime;
-
-    // Only check transactions within the time window
-    if (age > maxAgeSeconds) continue;
-
-    // Check incoming messages (in_msg)
-    const inMsg = tx.in_msg;
-    if (!inMsg) continue;
-
-    const value = BigInt(inMsg.value || "0");
-
-    // Allow 1% tolerance for fees
-    const minAmount = (expectedAmountNano * 99n) / 100n;
-    const maxAmount = (expectedAmountNano * 101n) / 100n;
-
-    if (value >= minAmount && value <= maxAmount) {
-      return tx;
-    }
-  }
-
-  return null;
-}
+const TREASURY = "UQAp1QxnLJ2z44IooUovvtVShw7hJBEdxCRV3RlbCYC3D8qj";
+const BodySchema = z.object({
+  intent_id: z.string().uuid(),
+  boc: z.string().min(10).max(100000),
+  sender: z.string().min(10).max(100).nullable().optional(),
+});
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Method not allowed", verified: false }, 405);
 
   try {
-    const { expected_amount_ton, boc } = await req.json();
+    const parsed = BodySchema.safeParse(await req.json());
+    if (!parsed.success) return json({ error: "Invalid verification request", verified: false }, 400);
 
-    if (!expected_amount_ton || expected_amount_ton <= 0) {
-      return new Response(
-        JSON.stringify({ verified: false, error: "Missing or invalid expected_amount_ton" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const admin = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+    const { data: intent, error } = await admin.from("ton_payment_intents")
+      .select("id,memo,amount_nano,status,expires_at,wallet_address,tx_hash")
+      .eq("id", parsed.data.intent_id).single();
 
-    if (!boc) {
-      return new Response(
-        JSON.stringify({ verified: false, error: "Missing BOC" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (error || !intent) return json({ error: "Payment reference not found", verified: false }, 404);
+    if (intent.status === "confirmed") return json({ verified: true, tx_hash: intent.tx_hash });
+    if (new Date(intent.expires_at).getTime() < Date.now()) return json({ error: "Payment reference expired", verified: false }, 410);
 
-    const expectedAmountNano = BigInt(Math.round(expected_amount_ton * 1e9));
+    const requestedSender = parsed.data.sender ? normalizeAddress(parsed.data.sender) : null;
+    await admin.from("ton_payment_intents").update({ boc: parsed.data.boc, wallet_address: parsed.data.sender ?? null, status: "submitted" }).eq("id", intent.id);
 
-    // Poll TONCenter for up to 30 seconds to find the transaction
-    const MAX_RETRIES = 10;
-    const RETRY_DELAY_MS = 3000;
-    const MAX_AGE_SECONDS = 120; // Look at transactions from last 2 minutes
-
-    let matchedTx: any = null;
-
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      if (attempt > 0) {
-        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      const response = await fetch(`https://toncenter.com/api/v2/getTransactions?address=${encodeURIComponent(TREASURY)}&limit=50&archival=true`);
+      const payload = await response.json().catch(() => null);
+      if (response.ok && payload?.ok && Array.isArray(payload.result)) {
+        const match = payload.result.find((tx: Record<string, unknown>) => matchesIntent(tx, intent.memo, Number(intent.amount_nano), requestedSender));
+        if (match) {
+          const txHash = String((match.transaction_id as { hash?: string } | undefined)?.hash ?? "");
+          const { error: updateError } = await admin.from("ton_payment_intents").update({
+            status: "confirmed", tx_hash: txHash, confirmed_at: new Date().toISOString(), failure_reason: null,
+          }).eq("id", intent.id).is("tx_hash", null);
+          if (updateError) return json({ error: "Payment was already used", verified: false }, 409);
+          return json({ verified: true, tx_hash: txHash });
+        }
       }
-
-      console.log(`Verification attempt ${attempt + 1}/${MAX_RETRIES} for ${expected_amount_ton} TON`);
-
-      const transactions = await getRecentTransactions(EXPECTED_WALLET);
-
-      matchedTx = findMatchingTransaction(transactions, expectedAmountNano, MAX_AGE_SECONDS);
-
-      if (matchedTx) {
-        console.log("Transaction verified on-chain:", JSON.stringify({
-          hash: matchedTx.transaction_id?.hash,
-          value: matchedTx.in_msg?.value,
-          time: matchedTx.utime,
-        }));
-        break;
-      }
+      if (attempt < 11) await new Promise((resolve) => setTimeout(resolve, 3000));
     }
 
-    if (!matchedTx) {
-      console.error("Verification FAILED: no matching transaction found after all retries");
-      return new Response(
-        JSON.stringify({ verified: false, error: "Transaction not found on-chain" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        verified: true,
-        tx_hash: matchedTx.transaction_id?.hash || "",
-        amount_nano: matchedTx.in_msg?.value || "0",
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ verified: false, error: "Payment is still confirming. Try again shortly." }, 202);
   } catch (error) {
-    console.error("Verification error:", error);
-    return new Response(
-      JSON.stringify({ verified: false, error: String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("TON verification failed", error);
+    return json({ verified: false, error: "Verification service error" }, 500);
   }
 });
+
+function matchesIntent(tx: Record<string, unknown>, memo: string, amountNano: number, sender: string | null) {
+  const input = tx.in_msg as Record<string, unknown> | undefined;
+  if (!input || Number(input.value) < amountNano) return false;
+  if (sender && normalizeAddress(String(input.source ?? "")) !== sender) return false;
+  return extractComment(input) === memo;
+}
+
+function extractComment(input: Record<string, unknown>) {
+  const data = input.msg_data as { text?: string; body?: string } | undefined;
+  if (data?.text) return data.text;
+  if (!data?.body) return "";
+  try {
+    const slice = Cell.fromBase64(data.body).beginParse();
+    if (slice.loadUint(32) !== 0) return "";
+    return slice.loadStringTail();
+  } catch { return ""; }
+}
+
+function normalizeAddress(value: string) {
+  try { return Address.parse(value).toRawString(); } catch { return value; }
+}
+
+function json(payload: unknown, status = 200) {
+  return new Response(JSON.stringify(payload), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}

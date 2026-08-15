@@ -1,4 +1,6 @@
 import type { TonConnectUI } from "@tonconnect/ui-react";
+import { beginCell } from "@ton/core";
+import { supabase } from "@/integrations/supabase/client";
 
 /** Single source of truth for the project treasury wallet. */
 export const TREASURY_ADDRESS = "UQAp1QxnLJ2z44IooUovvtVShw7hJBEdxCRV3RlbCYC3D8qj";
@@ -24,9 +26,24 @@ export class PaymentError extends Error {
   }
 }
 
+export type TonPaymentAction = "deposit" | "wallet_verification" | "server" | "battle_item" | "ai_pro" | "custom_server";
+type PaymentOptions = {
+  amountTon: number;
+  telegramId: number;
+  action: TonPaymentAction;
+  metadata?: Record<string, unknown>;
+};
+
 const toNano = (amountTon: number) => {
   const [whole = "0", fraction = ""] = amountTon.toFixed(9).split(".");
   return BigInt(whole) * 1_000_000_000n + BigInt(fraction.padEnd(9, "0"));
+};
+
+export const buildCommentPayload = (memo: string) => {
+  if (!/^nova:[a-f0-9-]{36}$/.test(memo)) {
+    throw new PaymentError("failed", "Invalid payment reference");
+  }
+  return beginCell().storeUint(0, 32).storeStringTail(memo).endCell().toBoc().toString("base64");
 };
 
 /** Reads the on-chain balance (in Gram/TON) of an address. Returns null when unavailable. */
@@ -73,43 +90,20 @@ const isCancellation = (err: unknown) => {
  * Opens the wallet modal and resolves once the user is connected (or times out).
  * Without this the first tap on a pay button did nothing visible.
  */
-const ensureConnected = async (tonConnectUI: TonConnectUI): Promise<boolean> => {
-  if (tonConnectUI.connected) return true;
-  return new Promise<boolean>((resolve) => {
-    let settled = false;
-    let unsubscribe: (() => void) | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const done = (value: boolean) => {
-      if (settled) return;
-      settled = true;
-      try { unsubscribe?.(); } catch { /* ignore */ }
-      if (timer) clearTimeout(timer);
-      resolve(value);
-    };
-    unsubscribe = tonConnectUI.onStatusChange((wallet) => {
-      if (wallet) done(true);
-    });
-    timer = setTimeout(() => done(tonConnectUI.connected), 120000);
-    void tonConnectUI.openModal().catch(() => done(false));
-    if (tonConnectUI.connected) done(true);
-  });
-};
-
 /**
  * Sends Gram (TON) to the project treasury with pre-flight validation.
  * Throws a PaymentError with a specific code so callers can show accurate feedback.
  */
 export const sendTonPayment = async (
   tonConnectUI: TonConnectUI,
-  opts: { amountTon: number; comment?: string },
-): Promise<{ boc: string }> => {
+  opts: PaymentOptions,
+): Promise<{ boc: string; intentId: string; memo: string }> => {
   const amountTon = Number(opts.amountTon);
   if (!Number.isFinite(amountTon) || amountTon <= 0) {
     throw new PaymentError("invalid_amount", "Enter a valid Gram amount");
   }
 
-  const connected = await ensureConnected(tonConnectUI);
-  if (!connected) {
+  if (!tonConnectUI.connected) {
     throw new PaymentError("not_connected", "Connect your wallet first");
   }
 
@@ -127,14 +121,17 @@ export const sendTonPayment = async (
     throw new PaymentError("wrong_network", "Switch your wallet to TON Mainnet and try again");
   }
 
-  // Send immediately through the connected wallet. Do not gate the transaction on a
-  // third-party balance API: those endpoints can be unavailable or blocked by CORS,
-  // which previously made valid deposits and NFT purchases fail before the wallet
-  // was even opened. The wallet performs the authoritative balance/fee simulation.
-  // Keep this as a plain transfer for maximum wallet compatibility.
+  const { data: intent, error: intentError } = await supabase.functions.invoke("create-ton-payment-intent", {
+    body: { telegram_id: opts.telegramId, action: opts.action, amount_ton: amountTon, metadata: opts.metadata ?? {} },
+  });
+  if (intentError || !intent?.id || !intent?.memo) {
+    throw new PaymentError("failed", "Could not prepare payment. Please try again.");
+  }
+
   const message = {
     address: TREASURY_ADDRESS,
     amount: toNano(amountTon).toString(),
+    payload: buildCommentPayload(intent.memo),
   };
 
   try {
@@ -147,7 +144,7 @@ export const sendTonPayment = async (
     if (!result?.boc) {
       throw new PaymentError("failed", "The wallet did not return a signed transaction. Please try again.");
     }
-    return { boc: result.boc };
+    return { boc: result.boc, intentId: intent.id, memo: intent.memo };
   } catch (err) {
     if (err instanceof PaymentError) throw err;
     console.error("[ton] sendTransaction failed", err);

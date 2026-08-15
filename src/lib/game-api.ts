@@ -179,7 +179,7 @@ export const performAttackForTelegram = (args: { telegramId: number; attackType?
 
 // ── On-Chain Verification ──
 export const verifyTonOnChain = async (
-  expectedAmountTon: number,
+  intentId: string,
   boc: string,
   sender?: string | null,
 ): Promise<{ verified: boolean; tx_hash?: string; error?: string }> => {
@@ -190,7 +190,7 @@ export const verifyTonOnChain = async (
       "Content-Type": "application/json",
       "Authorization": `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
     },
-    body: JSON.stringify({ expected_amount_ton: expectedAmountTon, boc, sender: sender ?? null }),
+    body: JSON.stringify({ intent_id: intentId, boc, sender: sender ?? null }),
   });
   if (!res.ok) return { verified: false, error: `Verification service unavailable (${res.status})` };
   return await res.json();

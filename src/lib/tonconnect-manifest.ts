@@ -7,10 +7,9 @@
  * itself, and random deployment URLs or Edge Function query URLs are not
  * reliable wallet-facing manifest locations.
  */
-const PRODUCTION_ORIGIN = "https://nova.megsyai.com";
-const PRODUCTION_MANIFEST = `${PRODUCTION_ORIGIN}/tonconnect-manifest.json`;
-
-/** Synchronous best guess, safe to use for the first render. */
 export function resolveTonManifestUrl(): string {
-  return PRODUCTION_MANIFEST;
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return `${window.location.origin}/tonconnect-manifest.json`;
+  }
+  return "https://nova.megsyai.com/tonconnect-manifest.json";
 }

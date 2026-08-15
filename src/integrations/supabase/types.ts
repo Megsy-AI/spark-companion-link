@@ -10190,6 +10190,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ton_payment_intents: {
+        Row: {
+          action: string
+          amount_nano: number
+          boc: string | null
+          confirmed_at: string | null
+          created_at: string
+          expires_at: string
+          failure_reason: string | null
+          id: string
+          memo: string
+          metadata: Json
+          status: string
+          telegram_id: number
+          tx_hash: string | null
+          updated_at: string
+          wallet_address: string | null
+        }
+        Insert: {
+          action: string
+          amount_nano: number
+          boc?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          failure_reason?: string | null
+          id?: string
+          memo: string
+          metadata?: Json
+          status?: string
+          telegram_id: number
+          tx_hash?: string | null
+          updated_at?: string
+          wallet_address?: string | null
+        }
+        Update: {
+          action?: string
+          amount_nano?: number
+          boc?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          failure_reason?: string | null
+          id?: string
+          memo?: string
+          metadata?: Json
+          status?: string
+          telegram_id?: number
+          tx_hash?: string | null
+          updated_at?: string
+          wallet_address?: string | null
+        }
+        Relationships: []
+      }
       tool_landing_images: {
         Row: {
           description: string | null

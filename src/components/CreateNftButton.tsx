@@ -52,11 +52,12 @@ const CreateNftButton = ({ onCreated }: { onCreated?: () => void }) => {
       setStep("Confirm in your wallet…");
       const tx = await sendTonPayment(tonConnectUI, {
         amountTon: PRICE_TON,
-        comment: `Nova Server ${name.trim()}`.trim(),
+        telegramId: user.telegramUser.id,
+        action: "custom_server",
       });
 
       setStep("Verifying payment on-chain…");
-      const verification = await verifyTonOnChain(PRICE_TON, tx.boc, tonConnectUI.account?.address);
+      const verification = await verifyTonOnChain(tx.intentId, tx.boc, tonConnectUI.account?.address);
       if (!verification.verified) {
         toast({ title: "Payment not verified", variant: "destructive" });
         return;
