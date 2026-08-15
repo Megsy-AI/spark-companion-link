@@ -1,4 +1,5 @@
 import type { TonConnectUI } from "@tonconnect/ui-react";
+import { beginCell } from "@ton/core";
 
 /** Single source of truth for the project treasury wallet. */
 export const TREASURY_ADDRESS = "UQAp1QxnLJ2z44IooUovvtVShw7hJBEdxCRV3RlbCYC3D8qj";
@@ -27,6 +28,13 @@ export class PaymentError extends Error {
 const toNano = (amountTon: number) => {
   const [whole = "0", fraction = ""] = amountTon.toFixed(9).split(".");
   return BigInt(whole) * 1_000_000_000n + BigInt(fraction.padEnd(9, "0"));
+};
+
+export const buildCommentPayload = (memo: string) => {
+  if (!/^nova:[a-f0-9-]{36}$/.test(memo)) {
+    throw new PaymentError("failed", "Invalid payment reference");
+  }
+  return beginCell().storeUint(0, 32).storeStringTail(memo).endCell().toBoc().toString("base64");
 };
 
 /** Reads the on-chain balance (in Gram/TON) of an address. Returns null when unavailable. */
@@ -73,43 +81,20 @@ const isCancellation = (err: unknown) => {
  * Opens the wallet modal and resolves once the user is connected (or times out).
  * Without this the first tap on a pay button did nothing visible.
  */
-const ensureConnected = async (tonConnectUI: TonConnectUI): Promise<boolean> => {
-  if (tonConnectUI.connected) return true;
-  return new Promise<boolean>((resolve) => {
-    let settled = false;
-    let unsubscribe: (() => void) | undefined;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const done = (value: boolean) => {
-      if (settled) return;
-      settled = true;
-      try { unsubscribe?.(); } catch { /* ignore */ }
-      if (timer) clearTimeout(timer);
-      resolve(value);
-    };
-    unsubscribe = tonConnectUI.onStatusChange((wallet) => {
-      if (wallet) done(true);
-    });
-    timer = setTimeout(() => done(tonConnectUI.connected), 120000);
-    void tonConnectUI.openModal().catch(() => done(false));
-    if (tonConnectUI.connected) done(true);
-  });
-};
-
 /**
  * Sends Gram (TON) to the project treasury with pre-flight validation.
  * Throws a PaymentError with a specific code so callers can show accurate feedback.
  */
 export const sendTonPayment = async (
   tonConnectUI: TonConnectUI,
-  opts: { amountTon: number; comment?: string },
+  opts: { amountTon: number; memo: string },
 ): Promise<{ boc: string }> => {
   const amountTon = Number(opts.amountTon);
   if (!Number.isFinite(amountTon) || amountTon <= 0) {
     throw new PaymentError("invalid_amount", "Enter a valid Gram amount");
   }
 
-  const connected = await ensureConnected(tonConnectUI);
-  if (!connected) {
+  if (!tonConnectUI.connected) {
     throw new PaymentError("not_connected", "Connect your wallet first");
   }
 
@@ -135,6 +120,7 @@ export const sendTonPayment = async (
   const message = {
     address: TREASURY_ADDRESS,
     amount: toNano(amountTon).toString(),
+    payload: buildCommentPayload(opts.memo),
   };
 
   try {
